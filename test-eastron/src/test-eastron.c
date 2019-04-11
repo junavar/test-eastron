@@ -8,7 +8,7 @@
  ============================================================================
  */
 
-#define VERSION "0.33"
+#define VERSION "0.34"
 
 
 #include <stdio.h>
@@ -120,7 +120,7 @@ int espera_siguiente_segundo(int fd_timer_segundo){
 
 int main(void) {
 
-	fprintf(stderr, "test-libmodbus %s\n", VERSION);
+	fprintf(stderr, "test-eastron %s\n", VERSION);
 	modbus_t *ctx;
 	ctx = modbus_new_rtu("/dev/ttyUSB0", 2400, 'N', 8, 1);
 	if (!ctx) {
@@ -143,7 +143,7 @@ int main(void) {
 	//Read 32 holding registers starting from address 0
 	int reg_solicitados = 32;
 	int num;
-	int espera=50000;
+	int espera=10000;
 	int fd_timer_segundo;
 	fd_timer_segundo=init_espera_siguiente_segundo();
 	if(fd_timer_segundo<0){
@@ -175,7 +175,7 @@ int main(void) {
 
 		printf("%03.0fV "   , pasar_4_bytes_a_float_2((unsigned char *) &reg[0]));
 		printf("%02.2fA ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x06]));
-		printf("%02.0fW ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x0C]));
+		printf("%04.0fW ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x0C]));
 		printf("%02.0fva ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x18]));
 		printf("fp:%0.2f ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x1E]));
 
@@ -193,7 +193,7 @@ int main(void) {
 		printf("Exp:%06.2fkWh ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x4A-0x46]));
 
 		terr=((float)err/(float)lecturas)*100;
-		printf("lecturas:%d err:%d tasa_error:%f faltas_acum:%d ", lecturas, err, terr, faltas_acumuladas );
+		printf("lecturas:%d err:%d tasa_error:%2.3f%% faltas_acum:%d ", lecturas, err, terr, faltas_acumuladas );
 
 
 		fflush(stdout);
