@@ -8,6 +8,9 @@
  ============================================================================
  */
 
+#define VERSION "0.33"
+
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -15,6 +18,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/timerfd.h>
+
 
 
 /*
@@ -116,7 +120,7 @@ int espera_siguiente_segundo(int fd_timer_segundo){
 
 int main(void) {
 
-	fprintf(stderr, "test-libmodbus v 0.32\n");
+	fprintf(stderr, "test-libmodbus %s\n", VERSION);
 	modbus_t *ctx;
 	ctx = modbus_new_rtu("/dev/ttyUSB0", 2400, 'N', 8, 1);
 	if (!ctx) {
@@ -148,6 +152,9 @@ int main(void) {
 
 	int num_faltas=0;
 	int faltas_acumuladas=0;
+	int lecturas=0; // numero de lecturas realizadas
+	int err=0; //errores
+	float terr=0.0; // tasa error
 
 	for (;;) {
 
@@ -158,26 +165,37 @@ int main(void) {
 		char * tiempo;
 		tiempo=get_iso_time();
 		printf("%s ", tiempo);
-		printf("faltas_acum: %d "   , faltas_acumuladas );
 
 		num = modbus_read_input_registers(ctx, 0x00, reg_solicitados, reg);
 		if (num != reg_solicitados) { // number of read registers is not the one expected
 			fprintf(stderr, "%s Failed to read: %s\n", get_iso_time(), modbus_strerror(errno));
+			err++;
 		}
+		lecturas++;
 
-		printf("Tension: %03.0fV  "   , pasar_4_bytes_a_float_2((unsigned char *) &reg[0]));
-		printf("Intensidad: %02.2fA  ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x06]));
-		printf("Potencia: %02.0fW  ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x0C]));
+		printf("%03.0fV "   , pasar_4_bytes_a_float_2((unsigned char *) &reg[0]));
+		printf("%02.2fA ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x06]));
+		printf("%02.0fW ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x0C]));
+		printf("%02.0fva ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x18]));
+		printf("fp:%0.2f ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x1E]));
 
 		usleep(espera);
 		//Read 2 holding registers starting from address 0x46 (frecuencia)
 		num = modbus_read_input_registers(ctx, 0x46, reg_solicitados, reg);
 		if (num != reg_solicitados) { // number of read registers is not the one expected
 			fprintf(stderr, "%s Failed to read: %s\n", get_iso_time(), modbus_strerror(errno));
+			err++;
 		}
+		lecturas++;
 
-		printf("Frecuencia: %02.2f  "  , pasar_4_bytes_a_float_2((unsigned char *) &reg[0]));
-		printf("Energia Imp:: %06.2f  ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x48-0x46]));
+		printf("%02.2fHz ",     pasar_4_bytes_a_float_2((unsigned char *) &reg[0x46-0x46]));
+		printf("Imp:%06.2fkWh ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x48-0x46]));
+		printf("Exp:%06.2fkWh ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x4A-0x46]));
+
+		terr=((float)err/(float)lecturas)*100;
+		printf("lecturas:%d err:%d tasa_error:%f faltas_acum:%d ", lecturas, err, terr, faltas_acumuladas );
+
+
 		fflush(stdout);
 
 
