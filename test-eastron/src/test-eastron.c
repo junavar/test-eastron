@@ -8,7 +8,7 @@
  ============================================================================
  */
 
-#define VERSION "0.36"
+#define VERSION "0.37"
 
 
 #include <stdio.h>
@@ -48,28 +48,37 @@ char * get_iso_time(){
 	return (&buf[0]);
 }
 
+
+/*
+ * obtiene el tiempo actual y lo ajusta exactamente (cero los microsegundos) al siguiente segundo
+ */
+void obtiene_tiempo_alineado_siguiente_segundo(struct timeval *ptiempo_alineado){
+	gettimeofday(ptiempo_alineado, NULL);
+	ptiempo_alineado->tv_sec+=1;
+	ptiempo_alineado->tv_usec=000000;
+}
+
+
 /*
  * Ajusta un temporizador para cada segundo usando File Descriptors
+ *
+ * tiempo_alineado: Tiempo donde empieza la temporizacion
+ *
+ * return: clockid (file despriptor)
  */
-int init_espera_siguiente_segundo(){
+int init_espera_siguiente_segundo(struct timeval tiempo_alineado){
 
 		int fd_timer_segundo; //
 		fd_timer_segundo = timerfd_create(CLOCK_REALTIME, 0);
 		if(fd_timer_segundo==-1) {
 			return -1;
 		}
-		struct timeval tiempo_alineado; //
-		struct itimerspec timer;
 
-		/* obtiene el siguiente segundo en tiempo absoluto*/
-		/* obtiene el tiempo actual e incremeta el segundo y pone a cero los microsegundos */
-		gettimeofday(&tiempo_alineado, NULL);
-		tiempo_alineado.tv_sec+=1;
-		tiempo_alineado.tv_usec=0;
+		struct itimerspec timer;
 
 		/* ajusta salto de temporizador con el siguiente segunto en tiempo absoluto*/
 		timer.it_value.tv_sec=tiempo_alineado.tv_sec;
-		timer.it_value.tv_nsec=0;
+		timer.it_value.tv_nsec=tiempo_alineado.tv_usec*1000; //pasa microsegundo a nanosegundos
 
 		/* ajusta salto periodico a 1s */
 		timer.it_interval.tv_sec=1;
@@ -125,11 +134,23 @@ int main(void) {
 	//Read 32 holding registers starting from address 0
 	int reg_solicitados = 32;
 	int num;
-	int espera=350000; //para 9600B
-	//int espera=10000 //para 2400B
+
+	struct timeval tiempo_alineado;
+	obtiene_tiempo_alineado_siguiente_segundo(&tiempo_alineado);
+
 	int fd_timer_segundo;
-	fd_timer_segundo=init_espera_siguiente_segundo();
+	fd_timer_segundo=init_espera_siguiente_segundo(tiempo_alineado);
 	if(fd_timer_segundo<0){
+		fprintf(stderr, "Error en temporizador errno:%d", errno);
+	}
+
+	/*
+	 * segundo temporizador desplazado 0,5s
+	 */
+	tiempo_alineado.tv_usec=500000;
+	int fd_timer2_segundo;
+	fd_timer2_segundo=init_espera_siguiente_segundo(tiempo_alineado);
+	if(fd_timer2_segundo<0){
 		fprintf(stderr, "Error en temporizador errno:%d", errno);
 	}
 
@@ -141,6 +162,9 @@ int main(void) {
 
 	for (;;) {
 
+		/*
+		 * espera en primer temporizador
+		 */
 		num_faltas=espera_siguiente_segundo(fd_timer_segundo);
 		faltas_acumuladas+=num_faltas;
 
@@ -162,7 +186,11 @@ int main(void) {
 		printf("%02.0fva ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x18]));
 		printf("fp:%0.2f ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x1E]));
 
-		usleep(espera);
+		/*
+		 * espera en segundo temporizador
+		 */
+		num_faltas=espera_siguiente_segundo(fd_timer2_segundo);
+		faltas_acumuladas+=num_faltas;
 
 		modbus_flush(ctx); // tira los datos que se hubiesen recibido y no leidos antes de la solicitud
 		//Read 2 holding registers starting from address 0x46 (frecuencia)
