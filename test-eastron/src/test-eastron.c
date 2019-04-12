@@ -8,7 +8,7 @@
  ============================================================================
  */
 
-#define VERSION "0.34"
+#define VERSION "0.35"
 
 
 #include <stdio.h>
@@ -49,67 +49,49 @@ char * get_iso_time(){
 }
 
 /*
- * Obtiene el siguiente segundo sobre el tiempo real desde el momento actual
+ * Ajusta un temporizador para cada segundo usando File Descriptors
  */
-void siguiente_segundo (struct timeval *tv_siguiente_segundo){
-	struct timeval tv_actual;
-	struct tm *ptiempo_bd, tiempo_bd;
-	/* obtiene el tiempo actual */
-	gettimeofday(&tv_actual, NULL);
-	/* Descompone el tiempo y obtiene siguiente segundo*/
-	ptiempo_bd=localtime(&tv_actual.tv_sec);
-	tiempo_bd=*ptiempo_bd;
-	tiempo_bd.tm_sec+=1;
-	tv_siguiente_segundo->tv_sec=mktime(&tiempo_bd);
-	tv_siguiente_segundo->tv_usec=0;
-}
-
 int init_espera_siguiente_segundo(){
-	/*
-		 * Temporizador de cada segundo
-		 */
+
 		int fd_timer_segundo; //
 		fd_timer_segundo = timerfd_create(CLOCK_REALTIME, 0);
 		if(fd_timer_segundo==-1) {
 			return -1;
 		}
-		struct timeval tiempo;
-		struct itimerspec ts;
+		struct timeval tiempo_alineado; //
+		struct itimerspec timer;
 
-		/*
-		 * alinea el inicio del temporizador con el inicio de segundo de tiempo real
-		 */
-		siguiente_segundo(&tiempo);
+		/* obtiene el siguiente segundo en tiempo absoluto*/
+		/* obtiene el tiempo actual e incremeta el segundo y pone a cero los microsegundos */
+		gettimeofday(&tiempo_alineado, NULL);
+		tiempo_alineado.tv_sec+=1;
+		tiempo_alineado.tv_usec=0;
 
-		ts.it_value.tv_sec=tiempo.tv_sec;
-		ts.it_value.tv_nsec=0;
-		ts.it_interval.tv_sec=0;
-		ts.it_interval.tv_nsec=0;
-		if (timerfd_settime(fd_timer_segundo, TFD_TIMER_ABSTIME, &ts, NULL) == -1){
-			return -1;
-		}
+		/* ajusta salto de temporizador con el siguiente segunto en tiempo absoluto*/
+		timer.it_value.tv_sec=tiempo_alineado.tv_sec;
+		timer.it_value.tv_nsec=0;
 
-		/*
-		 * reajuste de temporizador periodico a 1 segundo
-		 */
-		struct itimerspec timer = {
-		        .it_interval = {1, 0},  /* segundos y nanosegundos  */
-		        .it_value    = {1, 0},
-		};
+		/* ajusta salto periodico a 1s */
+		timer.it_interval.tv_sec=1;
+		timer.it_interval.tv_nsec=000000000;
 
-		if (timerfd_settime(fd_timer_segundo, 0, &timer, NULL) == -1){
+		/* aplica los ajustes */
+		if (timerfd_settime(fd_timer_segundo, TFD_TIMER_ABSTIME, &timer, NULL) == -1){
 			close(fd_timer_segundo);
 			return -1;
 		}
-
 		return fd_timer_segundo;
 };
 
+/*
+ * Se bloquea hasta el siguiente segundo
+ * Devuelve el numero de faltas de puntualidad
+ */
 int espera_siguiente_segundo(int fd_timer_segundo){
 	uint64_t s;
 	uint64_t num_expiraciones;
 
-	s = read(fd_timer_segundo, &num_expiraciones, sizeof(num_expiraciones)); /* esta funcion debe leer 8 bytes del fichero temporizador por eso se declara como uint64_t*/
+	s = read(fd_timer_segundo, &num_expiraciones, sizeof(num_expiraciones)); /* esta funcion debe leer obligatoriamente 8 bytes del fichero temporizador por eso se declara como uint64_t*/
 	if (s != sizeof(num_expiraciones)) {
 		return -1;
 	}
@@ -122,7 +104,7 @@ int main(void) {
 
 	fprintf(stderr, "test-eastron %s\n", VERSION);
 	modbus_t *ctx;
-	ctx = modbus_new_rtu("/dev/ttyUSB0", 2400, 'N', 8, 1);
+	ctx = modbus_new_rtu("/dev/ttyUSB0", 9600, 'N', 8, 1);
 	if (!ctx) {
 		fprintf(stderr, "Failed to create the context: %s\n",
 				modbus_strerror(errno));
@@ -143,7 +125,8 @@ int main(void) {
 	//Read 32 holding registers starting from address 0
 	int reg_solicitados = 32;
 	int num;
-	int espera=10000;
+	int espera=350000; //para 9600B
+	//int espera=10000 //para 2400B
 	int fd_timer_segundo;
 	fd_timer_segundo=init_espera_siguiente_segundo();
 	if(fd_timer_segundo<0){
