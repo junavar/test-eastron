@@ -8,11 +8,13 @@
  ============================================================================
  */
 
-#define VERSION "0.37"
+#define VERSION "0.38"
 
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
+#include <string.h>
 #include <errno.h>
 #include <modbus.h>
 #include <time.h>
@@ -109,11 +111,52 @@ int espera_siguiente_segundo(int fd_timer_segundo){
 
 
 
-int main(void) {
+int main(int argc, char *argv[]) {
 
-	fprintf(stderr, "test-eastron %s\n", VERSION);
+	int velocidad=0;
+	char dispositivo_serie[255];
+
+	int opt;
+	opterr = 0;
+
+	printf("test-eastron %s\n", VERSION);
+	printf("Uso: test-eastron [-b velocidad] [dispositivo_serie]\n");
+
+	while ((opt = getopt (argc, argv, "b:")) != -1) //string de formato contiene las opciones (letras con guion previo) previstas. Sufijo ":" indica que requiere un valor
+	    switch (opt){
+	      case 'b':
+	        velocidad=atoi(optarg);
+	        break;
+	      case '?':
+	        if (optopt == 'b')
+	          fprintf (stderr, "Opcion -%c requiere un argumento.\n", optopt);
+	        else if (isprint (optopt))
+	          fprintf (stderr, "Opcion desconocida '-%c'.\n", optopt);
+	        else
+	          fprintf (stderr, "Caracter de opcion desconocido '\\x%x'.\n", optopt);
+	        return 1;
+	      default:
+	        abort ();
+	    }
+	if (velocidad==0){
+		velocidad=2400;
+	}
+	if ( !((velocidad==2400) || (velocidad==4800) || (velocidad==9600))){
+		fprintf (stderr, "Error en parametro de velocidad -b %d\n", velocidad);
+		return -1;
+	}
+
+	if (optind >= argc) {
+		strncpy(dispositivo_serie, "/dev/ttyUSB0", sizeof(dispositivo_serie));
+	}else{
+		strncpy(dispositivo_serie, argv[optind], sizeof(dispositivo_serie));
+	}
+
+	printf ("velocidad  = %d  dispositivo_serie:%s\n", velocidad, dispositivo_serie);
+
+
 	modbus_t *ctx;
-	ctx = modbus_new_rtu("/dev/ttyUSB0", 9600, 'N', 8, 1);
+	ctx = modbus_new_rtu(dispositivo_serie, velocidad, 'N', 8, 1);
 	if (!ctx) {
 		fprintf(stderr, "Failed to create the context: %s\n",
 				modbus_strerror(errno));
