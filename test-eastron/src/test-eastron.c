@@ -8,7 +8,7 @@
  ============================================================================
  */
 
-#define VERSION "0.35"
+#define VERSION "0.36"
 
 
 #include <stdio.h>
@@ -148,7 +148,7 @@ int main(void) {
 		char * tiempo;
 		tiempo=get_iso_time();
 		printf("%s ", tiempo);
-
+		modbus_flush(ctx); // tira los datos que se hubiesen recibido y no leidos antes de la solicitud
 		num = modbus_read_input_registers(ctx, 0x00, reg_solicitados, reg);
 		if (num != reg_solicitados) { // number of read registers is not the one expected
 			fprintf(stderr, "%s Failed to read: %s\n", get_iso_time(), modbus_strerror(errno));
@@ -163,6 +163,8 @@ int main(void) {
 		printf("fp:%0.2f ", pasar_4_bytes_a_float_2((unsigned char *) &reg[0x1E]));
 
 		usleep(espera);
+
+		modbus_flush(ctx); // tira los datos que se hubiesen recibido y no leidos antes de la solicitud
 		//Read 2 holding registers starting from address 0x46 (frecuencia)
 		num = modbus_read_input_registers(ctx, 0x46, reg_solicitados, reg);
 		if (num != reg_solicitados) { // number of read registers is not the one expected
