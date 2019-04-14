@@ -16,12 +16,11 @@
 #include <ctype.h>
 #include <string.h>
 #include <errno.h>
-#include <modbus.h>
 #include <time.h>
 #include <unistd.h>
 #include <sys/timerfd.h>
 
-
+#include "modbus-rtu.h"
 
 /*
  * pasa a flotante los 2 registros de 16 bits que devuelve libmodbus.
@@ -141,7 +140,7 @@ int main(int argc, char *argv[]) {
 	if (velocidad==0){
 		velocidad=2400;
 	}
-	if ( !((velocidad==2400) || (velocidad==4800) || (velocidad==9600))){
+	if ( !((velocidad==1200) || (velocidad==2400) || (velocidad==4800) || (velocidad==9600))){
 		fprintf (stderr, "Error en parametro de velocidad -b %d\n", velocidad);
 		return -1;
 	}
@@ -169,7 +168,7 @@ int main(int argc, char *argv[]) {
 		exit(1);
 	}
 
-	//Set the Modbus address of the remote slave (to 3)
+	//Set the Modbus address of the remote slave (to 1)
 	modbus_set_slave(ctx, 1);
 
 	uint16_t reg[128]; // will store read registers values
